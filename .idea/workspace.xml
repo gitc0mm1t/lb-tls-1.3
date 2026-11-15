@@ -5,58 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="71af6f1d-d34d-4fb4-b2b1-b9515de4302e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-analyze/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-checklist/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-clarify/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-constitution/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-converge/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-implement/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-plan/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-specify/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-tasks/SKILL.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.dockerignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/init-options.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/integration.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/integrations/claude.manifest.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/integrations/speckit.manifest.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/memory/.constitution-template.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/memory/constitution.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/check-prerequisites.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/common.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/create-new-feature.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/resolve-template.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/setup-plan.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/setup-tasks.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/templates/checklist-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/templates/constitution-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/templates/plan-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/templates/spec-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/templates/tasks-template.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/workflows/speckit/workflow.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.specify/workflows/workflow-registry.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/demo_backend.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker/grafana/dashboards/mylb.json" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker/grafana/provisioning/dashboards/mylb.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker/grafana/provisioning/datasources/prometheus.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/docker/prometheus.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/__main__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/backend.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/logs.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/metrics.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/pool.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/mylb/proxy.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/prometheus.yml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/demo-backends.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/scripts/gen-cert.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/tests/test_pool.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
