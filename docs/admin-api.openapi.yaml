@@ -1,0 +1,710 @@
+openapi: 3.1.0
+
+info:
+  title: mylb Admin API
+  version: 1.0.0
+  summary: Управление балансировщиком mylb без перезапуска.
+  description: |
+    API управления (control plane) для mylb: бэкенды, TLS-сертификат и настройки
+    меняются на работающем процессе, без перезапуска и без обрыва идущих запросов.
+
+    ## Общие правила
+
+    **Отдельный листенер.** API живёт на своём порту (`--admin`, по умолчанию
+    `127.0.0.1:9101`) и никогда не доступен через клиентский порт `:8443`
+    или порт метрик `:9100`.
+
+    **Авторизация.** Каждый запрос несёт `Authorization: Bearer <токен>`.
+    Токен задаётся переменной окружения `MYLB_ADMIN_TOKEN` (не аргументом
+    командной строки: аргументы видны в `ps`). Без токена admin-листенер не запускается.
+
+    **Транспорт.** В v1 это обычный HTTP, поэтому листенер должен слушать только
+    на loopback или внутри docker-сети. Через этот API передаётся приватный ключ:
+    открывать порт в обычную сеть без TLS нельзя. Если адрес не loopback,
+    балансировщик пишет предупреждение в лог.
+
+    **Сначала диск, потом память.** Изменение сначала записывается в файл
+    состояния (`--state-file`, по умолчанию `mylb-state.json`), и только после
+    успешной записи применяется.
+    Если запись не удалась, ответ `500 persist_failed`, а балансировщик
+    работает как раньше. После перезапуска действует файл состояния;
+    флаги `--backends`, `--max-conns`, `--health-path`, `--health-interval`
+    используются, только пока файла ещё нет.
+
+    **Проверка до применения.** Некорректный запрос не меняет ничего:
+    либо изменение применено целиком, либо не применено вовсе.
+
+    **Без обрыва запросов.** Идущие запросы дорабатывают со старыми параметрами:
+    удалённый бэкенд дообслуживает свои запросы, старый сертификат остаётся
+    у уже установленных соединений.
+
+    **Ошибки.** Все ошибки приходят в формате `application/problem+json`
+    (RFC 9457) с машинным полем `code`. Кроме описанных у операций, любой
+    запрос может вернуть `401`, `405`, `413` (тело больше 1 МБ) и `415`
+    (тело не `application/json`). Непредвиденный сбой даёт `500 internal_error`.
+    Каждое соединение обслуживает один запрос (`Connection: close`).
+
+    **Аудит.** Каждый изменяющий запрос попадает в JSON-лог: действие, объект,
+    результат, адрес клиента. Токен и приватный ключ в лог не пишутся никогда.
+
+    **Чего здесь нет.** Адреса листенеров (`--listen`, `--metrics`, `--admin`)
+    и пути к файлам сертификата меняются только перезапуском. Метрики остаются
+    на `:9100/metrics`.
+
+servers:
+  - url: http://127.0.0.1:9101/v1
+    description: Локальный запуск и docker-compose (порт проброшен только на 127.0.0.1)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: backends
+    description: Серверы, на которые балансировщик отправляет запросы.
+  - name: tls
+    description: Сертификат и ключ клиентского листенера (один сертификат, без SNI).
+  - name: settings
+    description: Параметры, которые можно менять на лету.
+
+paths:
+  /backends:
+    get:
+      tags: [backends]
+      operationId: listBackends
+      summary: Список бэкендов
+      description: Возвращает все бэкенды с их текущим состоянием, в порядке добавления.
+      responses:
+        "200":
+          description: Список бэкендов (может быть пустым).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackendList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [backends]
+      operationId: createBackend
+      summary: Добавить бэкенд
+      description: |
+        Добавляет бэкенд в пул. Сразу после добавления выполняется первая
+        проверка здоровья; трафик пойдёт на бэкенд только после успешной
+        проверки. Поле `alive` в ответе показывает её результат.
+
+        `id` вычисляется из адреса, поэтому тот же адрес нельзя добавить дважды.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackendCreate"
+            example:
+              url: http://b4:9000
+      responses:
+        "201":
+          description: Бэкенд добавлен.
+          headers:
+            Location:
+              description: Путь к созданному бэкенду.
+              schema:
+                type: string
+                examples: [/v1/backends/3fa9c1d2]
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backend"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: |
+            Бэкенд с таким адресом уже есть (`code: backend_exists`).
+            Заголовок `Location` указывает на существующий.
+          headers:
+            Location:
+              description: Путь к уже существующему бэкенду.
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: backend_exists
+                detail: Бэкенд b4:9000 уже есть в пуле.
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/PersistFailed"
+
+  /backends/{backend_id}:
+    parameters:
+      - $ref: "#/components/parameters/BackendId"
+
+    get:
+      tags: [backends]
+      operationId: getBackend
+      summary: Один бэкенд
+      responses:
+        "200":
+          description: Бэкенд.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backend"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [backends]
+      operationId: updateBackend
+      summary: Вывести бэкенд из ротации или вернуть
+      description: |
+        Меняет административное состояние. `draining` значит, что бэкенд не
+        получает новых запросов (в том числе по sticky-cookie), а идущие
+        дорабатывают. Проверки здоровья продолжаются. `active` возвращает
+        бэкенд в ротацию.
+
+        Адрес изменить нельзя: это удаление и добавление заново.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BackendUpdate"
+            example:
+              state: draining
+      responses:
+        "200":
+          description: Обновлённый бэкенд.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Backend"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/PersistFailed"
+
+    delete:
+      tags: [backends]
+      operationId: deleteBackend
+      summary: Удалить бэкенд
+      description: |
+        Убирает бэкенд из пула. Новые запросы на него не идут с момента ответа,
+        идущие запросы дорабатывают. Клиенты со sticky-cookie на этот бэкенд
+        получат другой бэкенд и новую cookie.
+
+        Удалить можно и последний бэкенд: тогда клиенты получают `503`,
+        пока не добавлен новый.
+      responses:
+        "204":
+          description: Удалён.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/PersistFailed"
+
+  /tls/certificate:
+    get:
+      tags: [tls]
+      operationId: getCertificate
+      summary: Сведения об активном сертификате
+      description: |
+        Возвращает сведения о сертификате, который сейчас получают новые
+        соединения. Приватный ключ не возвращается никогда.
+      responses:
+        "200":
+          description: Активный сертификат.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    put:
+      tags: [tls]
+      operationId: replaceCertificate
+      summary: Загрузить новый сертификат и ключ
+      description: |
+        Порядок действий:
+
+        1. Проверка: сертификат и ключ читаются, подходят друг другу, ключ не
+           защищён паролем.
+        2. Запись в файлы `--cert` и `--key` (атомарная замена).
+        3. Переключение: новые соединения получают новый сертификат, уже
+           установленные дорабатывают со старым.
+
+        Если любой шаг не удался, активным остаётся прежний сертификат.
+
+        Истёкший или ещё не действующий сертификат принимается (это решение
+        оператора), но в ответе будет `warnings`, а в логе предупреждение.
+
+        Повтор того же запроса безопасен: результат тот же.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CertificateUpload"
+      responses:
+        "200":
+          description: Сертификат заменён.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: |
+            Пара не прошла проверку. `code` называет причину: `cert_invalid`,
+            `key_invalid`, `key_encrypted` или `cert_key_mismatch`. Если в теле
+            нет `cert_pem` или `key_pem`, код будет `validation_failed`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Unprocessable Content
+                status: 422
+                code: cert_key_mismatch
+                detail: Сертификат и ключ не совпадают. Активным остаётся прежний сертификат.
+        "500":
+          $ref: "#/components/responses/PersistFailed"
+
+  /tls/certificate/reload:
+    post:
+      tags: [tls]
+      operationId: reloadCertificate
+      summary: Перечитать сертификат и ключ с диска
+      description: |
+        Немедленно перечитывает файлы `--cert` и `--key`. Нужен, когда файлы
+        заменил внешний инструмент (например, certbot) и не хочется ждать
+        автоматического обнаружения. Тела у запроса нет.
+      responses:
+        "200":
+          description: Файлы перечитаны, сертификат активен.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Certificate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: |
+            Файлы на диске нельзя загрузить; активным остаётся прежний
+            сертификат. `code`: `cert_file_missing`, `cert_invalid`,
+            `key_invalid`, `key_encrypted` или `cert_key_mismatch`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Conflict
+                status: 409
+                code: cert_file_missing
+                detail: Файл /certs/server.crt не найден. Активным остаётся прежний сертификат.
+
+  /settings:
+    get:
+      tags: [settings]
+      operationId: getSettings
+      summary: Текущие настройки
+      responses:
+        "200":
+          description: Настройки.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    patch:
+      tags: [settings]
+      operationId: updateSettings
+      summary: Изменить настройки
+      description: |
+        Меняются только переданные поля, остальные остаются как были.
+        Неизвестное поле или значение вне допустимого диапазона даёт `422`,
+        и не меняется ничего.
+
+        `max_conns` действует со следующего запроса, параметры проверок
+        здоровья действуют со следующего цикла проверок.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+            example:
+              max_conns: 50
+      responses:
+        "200":
+          description: Настройки после изменения (все поля).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/PersistFailed"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Токен из переменной окружения `MYLB_ADMIN_TOKEN`.
+
+  parameters:
+    BackendId:
+      name: backend_id
+      in: path
+      required: true
+      description: Идентификатор бэкенда (тот же, что в sticky-cookie `LB_BACKEND`).
+      schema:
+        type: string
+        pattern: "^[0-9a-f]{8}$"
+        examples: [3fa9c1d2]
+
+  schemas:
+    Backend:
+      type: object
+      additionalProperties: false
+      required: [id, url, name, state, alive, active_requests]
+      properties:
+        id:
+          type: string
+          pattern: "^[0-9a-f]{8}$"
+          readOnly: true
+          description: Первые 8 символов SHA-256 от `host:port`. Не меняется, пока не меняется адрес.
+        url:
+          type: string
+          format: uri
+          description: Адрес бэкенда. Только схема `http`.
+        name:
+          type: string
+          readOnly: true
+          description: "`host:port`. Это значение метки `backend` в метриках и логах."
+        state:
+          $ref: "#/components/schemas/BackendState"
+        alive:
+          type: boolean
+          readOnly: true
+          description: Результат проверок здоровья. Трафик получает только бэкенд с `state=active` и `alive=true`.
+        active_requests:
+          type: integer
+          minimum: 0
+          readOnly: true
+          description: Сколько запросов бэкенд обрабатывает прямо сейчас.
+      examples:
+        - id: 3fa9c1d2
+          url: http://b4:9000
+          name: b4:9000
+          state: active
+          alive: true
+          active_requests: 0
+
+    BackendState:
+      type: string
+      enum: [active, draining]
+      description: |
+        Административное состояние, которое задаёт оператор:
+        `active` — в ротации; `draining` — новых запросов не получает.
+
+    BackendCreate:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          pattern: "^http://[^/?#]+$"
+          description: Вид `http://host:port`, без пути. Порт по умолчанию 80.
+        state:
+          $ref: "#/components/schemas/BackendState"
+          default: active
+          description: Можно добавить бэкенд сразу в `draining`, чтобы включить его позже.
+
+    BackendUpdate:
+      type: object
+      additionalProperties: false
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/BackendState"
+
+    BackendList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Backend"
+
+    Certificate:
+      type: object
+      additionalProperties: false
+      required: [subject, issuer, sans, not_before, not_after, fingerprint_sha256, loaded_at, source, warnings]
+      properties:
+        subject:
+          type: string
+          description: Кому выписан сертификат.
+          examples: [CN=localhost]
+        issuer:
+          type: string
+          description: Кем выписан.
+          examples: [CN=localhost]
+        sans:
+          type: array
+          description: Имена и адреса, для которых сертификат действителен (Subject Alternative Names).
+          items:
+            type: string
+          examples:
+            - [localhost, 127.0.0.1]
+        not_before:
+          type: string
+          format: date-time
+        not_after:
+          type: string
+          format: date-time
+          description: Дата истечения. То же значение отдаётся в метриках.
+        fingerprint_sha256:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: SHA-256 от сертификата в DER. По нему удобно проверять, что активен именно тот сертификат.
+        loaded_at:
+          type: string
+          format: date-time
+          description: Когда этот сертификат стал активным.
+        source:
+          type: string
+          enum: [startup, auto, manual, upload]
+          description: |
+            Как сертификат был загружен: `startup` — при запуске; `auto` —
+            балансировщик сам заметил замену файлов; `manual` — по команде
+            перечитать; `upload` — загружен через этот API.
+        warnings:
+          type: array
+          description: Пусто, если всё в порядке.
+          items:
+            type: string
+            enum: [expired, not_yet_valid]
+      examples:
+        - subject: CN=localhost
+          issuer: CN=localhost
+          sans: [localhost, 127.0.0.1]
+          not_before: "2026-11-10T12:00:00Z"
+          not_after: "2027-11-10T12:00:00Z"
+          fingerprint_sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+          loaded_at: "2026-11-14T23:10:05Z"
+          source: upload
+          warnings: []
+
+    CertificateUpload:
+      type: object
+      additionalProperties: false
+      required: [cert_pem, key_pem]
+      properties:
+        cert_pem:
+          type: string
+          description: Сертификат в PEM. Может содержать цепочку, тогда сначала серверный, затем промежуточные.
+        key_pem:
+          type: string
+          writeOnly: true
+          description: Приватный ключ в PEM, без пароля. Только на запись.
+      examples:
+        - cert_pem: "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
+          key_pem: "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+
+    Settings:
+      type: object
+      additionalProperties: false
+      required: [max_conns, health_path, health_interval]
+      properties:
+        max_conns:
+          type: integer
+          minimum: 1
+          description: Сколько одновременных запросов разрешено на один бэкенд. Флаг `--max-conns`.
+        health_path:
+          type: string
+          pattern: "^/[!-~]*$"
+          description: Путь проверки здоровья на бэкендах, без пробелов. Флаг `--health-path`.
+        health_interval:
+          type: number
+          minimum: 0.1
+          description: Интервал между проверками, в секундах. Флаг `--health-interval`.
+      examples:
+        - max_conns: 100
+          health_path: /healthz
+          health_interval: 2.0
+
+    SettingsUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        max_conns:
+          type: integer
+          minimum: 1
+        health_path:
+          type: string
+          pattern: "^/[!-~]*$"
+        health_interval:
+          type: number
+          minimum: 0.1
+
+    Problem:
+      type: object
+      description: Ошибка в формате RFC 9457 с двумя дополнительными полями, `code` и `errors`.
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          default: about:blank
+        title:
+          type: string
+          description: Короткое название ошибки, одинаковое для одного `status`.
+        status:
+          type: integer
+          description: HTTP-код ответа.
+        code:
+          type: string
+          description: Машинный код ошибки. Скрипты проверяют его, а не текст.
+          enum:
+            - invalid_json
+            - validation_failed
+            - unauthorized
+            - not_found
+            - method_not_allowed
+            - payload_too_large
+            - unsupported_media_type
+            - backend_exists
+            - cert_invalid
+            - key_invalid
+            - key_encrypted
+            - cert_key_mismatch
+            - cert_file_missing
+            - persist_failed
+            - internal_error
+        detail:
+          type: string
+          description: Объяснение для человека.
+        errors:
+          type: array
+          description: Какие поля не прошли проверку (только для `validation_failed`).
+          items:
+            type: object
+            additionalProperties: false
+            required: [field, message]
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    BadRequest:
+      description: "Тело запроса не является корректным JSON-объектом (`code: invalid_json`)."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            code: invalid_json
+            detail: Тело запроса не разобрано как JSON.
+
+    Unauthorized:
+      description: "Токена нет или он неверный (`code: unauthorized`)."
+      headers:
+        WWW-Authenticate:
+          description: Всегда `Bearer`.
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Unauthorized
+            status: 401
+            code: unauthorized
+
+    NotFound:
+      description: "Такого бэкенда нет (`code: not_found`)."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            code: not_found
+            detail: Бэкенда 3fa9c1d2 нет в пуле.
+
+    ValidationFailed:
+      description: "JSON корректен, но значения не проходят проверку (`code: validation_failed`). Ничего не изменено."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Unprocessable Content
+            status: 422
+            code: validation_failed
+            detail: Запрос не прошёл проверку.
+            errors:
+              - field: url
+                message: Нужен вид http://host:port, схема https не поддерживается.
+
+    PersistFailed:
+      description: |
+        Изменение не удалось записать на диск (`code: persist_failed`),
+        поэтому оно не применено. Балансировщик работает как раньше.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: about:blank
+            title: Internal Server Error
+            status: 500
+            code: persist_failed
+            detail: Не удалось записать файл состояния.

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="71af6f1d-d34d-4fb4-b2b1-b9515de4302e" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-analyze/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-checklist/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-clarify/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-constitution/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-converge/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-implement/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-plan/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-specify/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.claude/skills/speckit-tasks/SKILL.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.dockerignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/init-options.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/integration.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/integrations/claude.manifest.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/integrations/speckit.manifest.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/memory/.constitution-template.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/memory/constitution.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/check-prerequisites.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/common.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/create-new-feature.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/resolve-template.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/setup-plan.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/scripts/bash/setup-tasks.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/templates/checklist-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/templates/constitution-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/templates/plan-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/templates/spec-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/templates/tasks-template.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/workflows/speckit/workflow.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.specify/workflows/workflow-registry.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/demo_backend.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docker/grafana/dashboards/mylb.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docker/grafana/provisioning/dashboards/mylb.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docker/grafana/provisioning/datasources/prometheus.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/docker/prometheus.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/__main__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/backend.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/logs.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/metrics.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/pool.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/mylb/proxy.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/prometheus.yml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/demo-backends.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/gen-cert.sh" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/tests/test_pool.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.429285320687832" />
+      <entry key="MS500" value="3.164026633668406" />
+      <entry key="S2" value="4.3989306804273065" />
+      <entry key="S5" value="5.369396447767759" />
+      <entry key="S10" value="7.571410560411121" />
+      <entry key="S30" value="12.229326934698108" />
+      <entry key="S60" value="14.315749783113356" />
+      <entry key="M2" value="15.573188805610656" />
+      <entry key="M5" value="16.407520126450144" />
+      <entry key="M10" value="16.70000865967677" />
+      <entry key="M15" value="16.79932222986394" />
+      <entry key="M30" value="16.92748897031074" />
+      <entry key="H1" value="17.325851309742937" />
+      <entry key="H2" value="18.346531885356352" />
+      <entry key="H4" value="19.606338824668626" />
+      <entry key="D1" value="21.487039199531438" />
+      <entry key="W1" value="21.923306195052" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.3758915926072564" />
+      <entry key="MS500" value="3.142851207779519" />
+      <entry key="S2" value="4.39181932900667" />
+      <entry key="S5" value="5.36573906290137" />
+      <entry key="S10" value="7.568561566221156" />
+      <entry key="S30" value="12.227658216567034" />
+      <entry key="S60" value="14.314754779587355" />
+      <entry key="M2" value="15.572642934584204" />
+      <entry key="M5" value="16.40728894574939" />
+      <entry key="M10" value="16.699890820473417" />
+      <entry key="M15" value="16.79924316068671" />
+      <entry key="M30" value="16.927449047134875" />
+      <entry key="H1" value="17.32583046616772" />
+      <entry key="H2" value="18.346520278274358" />
+      <entry key="H4" value="19.606332284679002" />
+      <entry key="D1" value="21.48703792592608" />
+      <entry key="W1" value="21.923306007019804" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3M2y2P97lzC30NxdwbiEZCRdHoy" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
+    "git-widget-placeholder": "master",
+    "junie.onboarding.icon.badge.shown": "true",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "/Users/ksyushkin/DevOps/balancer_TLS _1.3/mylb-py",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "ml.llm.LLMThirdPartyAiProvidersConfigurable",
+    "to.speed.mode.migration.done": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-jdk-30f59d01ecdd-a203e0a19954-intellij.indexing.shared.core-IU-262.10968.63" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-IU-262.10968.63" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="71af6f1d-d34d-4fb4-b2b1-b9515de4302e" name="Changes" comment="" />
+      <created>1794562749307</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1794562749307</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
+  </component>
+</project>

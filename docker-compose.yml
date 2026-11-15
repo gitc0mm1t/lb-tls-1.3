@@ -1,0 +1,136 @@
+# Всё одной командой:  docker compose up --build -d
+#
+#   https://localhost:8443    балансировщик (TLS 1.3)
+#   http://localhost:9090     Prometheus
+#   http://localhost:3000     Grafana (дашборд "mylb")
+#   http://localhost:9100     /metrics балансировщика (для curl)
+#   http://localhost:9101     admin API (только если задан MYLB_ADMIN_TOKEN, см. README)
+#   http://localhost:9001-3   тестовые бэкенды напрямую (для экспериментов с health-check)
+#   http://localhost:9004     запасной бэкенд b4: в ротацию его добавляют через admin API
+#
+# Все порты привязаны к 127.0.0.1: снаружи, из вашей сети, ничего не видно.
+
+x-backend: &backend
+  build: .
+  image: mylb:local
+  init: true            # tini как PID 1: иначе контейнер игнорирует SIGTERM и останавливается 10 с
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "python", "-c",
+           "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9000/healthz', timeout=2).status == 200 else 1)"]
+    interval: 3s
+    timeout: 3s
+    retries: 10
+    start_period: 2s
+
+services:
+  # Одноразовая задача: генерирует самоподписанный сертификат в общий том.
+  certgen:
+    build: .
+    image: mylb:local
+    user: root
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        if [ ! -f /certs/server.crt ]; then
+          CERT_DIR=/certs bash scripts/gen-cert.sh
+        fi
+        # Каталог и файлы отдаём пользователю app (uid 10001), от которого работает lb:
+        # admin API заменяет сертификат, а для этого нужно право записи в каталог.
+        chown -R 10001 /certs
+        chmod 644 /certs/server.crt
+        chmod 600 /certs/server.key   # ключ читает только владелец
+    volumes:
+      - certs:/certs
+    restart: "no"
+
+  b1:
+    <<: *backend
+    entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b1"]
+    ports: ["127.0.0.1:9001:9000"]
+  b2:
+    <<: *backend
+    entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b2"]
+    ports: ["127.0.0.1:9002:9000"]
+  b3:
+    <<: *backend
+    entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b3"]
+    ports: ["127.0.0.1:9003:9000"]
+  # Запасной бэкенд: в --backends у lb его нет. Нужен, чтобы попробовать добавление
+  # через admin API:  POST /v1/backends  {"url": "http://b4:9000"}
+  b4:
+    <<: *backend
+    entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b4"]
+    ports: ["127.0.0.1:9004:9000"]
+
+  lb:
+    build: .
+    image: mylb:local
+    init: true
+    restart: unless-stopped
+    # Graceful shutdown у LB занимает до 15 с; без этого Docker убьёт его через 10 с.
+    stop_grace_period: 20s
+    depends_on:
+      certgen:
+        condition: service_completed_successfully
+      b1: {condition: service_healthy}
+      b2: {condition: service_healthy}
+      b3: {condition: service_healthy}
+    command:
+      - "--listen=0.0.0.0:8443"
+      - "--metrics=0.0.0.0:9100"      # внутри docker-сети; наружу порт открыт только на loopback
+      - "--admin=0.0.0.0:9101"        # то же самое; без MYLB_ADMIN_TOKEN admin API не запускается
+      - "--state-file=/state/mylb-state.json"
+      - "--cert=/certs/server.crt"
+      - "--key=/certs/server.key"
+      - "--backends=http://b1:9000,http://b2:9000,http://b3:9000"   # имена сервисов разрешает docker DNS
+      - "--max-conns=${MAX_CONNS:-100}"
+    environment:
+      # Admin API включается, только если переменная задана при запуске:
+      #   MYLB_ADMIN_TOKEN=мой-секрет docker compose up -d
+      # С включённым admin API бэкенды и настройки берутся из файла состояния (том state),
+      # а --backends и --max-conns выше действуют только при самом первом запуске.
+      MYLB_ADMIN_TOKEN: ${MYLB_ADMIN_TOKEN:-}
+    volumes:
+      - certs:/certs          # на запись: admin API заменяет файлы сертификата
+      - state:/state          # файл состояния admin API переживает пересоздание контейнера
+    ports:
+      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:9100:9100"
+      - "127.0.0.1:9101:9101"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9100/metrics', timeout=2).status == 200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    depends_on: [lb]
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    depends_on: [prometheus]
+    environment:
+      # Учебный стенд, доступен только с localhost: пускаем без логина.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/etc/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes:
+  certs:
+  state:
+  prometheus-data:
+  grafana-data:
