@@ -15,7 +15,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Бэкенды: жив (1) / выведен из ротации (0)",
+      "title": "Бэкенды сейчас: UP = жив, DOWN = выведен из ротации",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -35,6 +35,7 @@
             "uid": "prometheus"
           },
           "expr": "lb_backend_up",
+          "instant": true,
           "legendFormat": "{{backend}}"
         }
       ],

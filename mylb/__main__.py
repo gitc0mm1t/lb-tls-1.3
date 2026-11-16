@@ -32,8 +32,11 @@ def main() -> None:
                     help="файл, в который admin API сохраняет бэкенды и настройки")
     ap.add_argument("--cert", default="certs/server.crt", help="TLS-сертификат")
     ap.add_argument("--key", default="certs/server.key", help="приватный ключ")
-    ap.add_argument("--backends", default="http://127.0.0.1:9001,http://127.0.0.1:9002,http://127.0.0.1:9003",
-                    help="бэкенды через запятую")
+    # Списка бэкендов по умолчанию нет: адреса серверов не зашиты ни в код, ни в конфиг.
+    # Основной способ — admin API (POST /v1/backends). Флаг оставлен для запуска без него.
+    ap.add_argument("--backends", default="",
+                    help="необязательно: бэкенды через запятую для запуска без admin API; "
+                         "с admin API бэкенды добавляют и удаляют запросами, а хранит их файл состояния")
     ap.add_argument("--health-path", default="/healthz", help="путь health-check'а на бэкендах")
     ap.add_argument("--health-interval", type=float, default=2.0, help="как часто проверять бэкенды, с")
     ap.add_argument("--max-conns", type=int, default=100,
@@ -44,9 +47,10 @@ def main() -> None:
     # видны всем пользователям машины через `ps`.
     token = os.environ.get("MYLB_ADMIN_TOKEN", "")
 
-    # Откуда берём бэкенды и настройки. Без admin API — из флагов, как раньше.
-    # С admin API главным становится файл состояния: иначе всё, что добавили
-    # через API, пропадало бы при перезапуске. Флаги нужны только для первого запуска.
+    # Откуда берём бэкенды и настройки. С admin API главный источник — файл состояния:
+    # в него попадает всё, что добавили и удалили запросами, поэтому изменения переживают
+    # перезапуск. При первом запуске файла ещё нет, и пул пуст (если не задан --backends).
+    # Без admin API остаются только флаги.
     entries = [{"url": u.strip(), "state": "active"} for u in args.backends.split(",") if u.strip()]
     settings = {"max_conns": args.max_conns, "health_path": args.health_path,
                 "health_interval": args.health_interval}
@@ -69,7 +73,9 @@ def main() -> None:
             b.state = e["state"]
             pool.add(b)
         if not pool.backends and not token:  # с admin API пустой пул допустим: бэкенды добавят позже
-            raise ValueError("не задано ни одного бэкенда")
+            raise ValueError("нет ни одного бэкенда. Включите admin API (переменная окружения "
+                             "MYLB_ADMIN_TOKEN) и добавьте бэкенды запросом POST /v1/backends, "
+                             "либо передайте список флагом --backends")
     except ValueError as e:
         log("error", "не удалось создать пул", err=str(e))
         sys.exit(1)
@@ -122,6 +128,9 @@ def main() -> None:
 
     log("info", "балансировщик запущен", listen=args.listen, metrics=args.metrics,
         admin=args.admin if asrv else "off", backends=len(pool.backends), max_conns=pool.max_conns)
+    if not pool.backends:
+        log("warn", "пул пуст: клиенты будут получать 503, пока вы не добавите бэкенд "
+                    "запросом POST /v1/backends", admin=args.admin)
     server.serve_forever()
     server.server_close()  # новых соединений больше не принимаем
 

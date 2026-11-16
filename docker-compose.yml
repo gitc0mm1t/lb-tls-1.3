@@ -1,12 +1,18 @@
-# Всё одной командой:  docker compose up --build -d
+# Весь стенд:
+#   cp .env.example .env            # один раз: впишите в .env свой токен admin API
+#   docker compose up --build -d
+#
+# Балансировщик стартует с ПУСТЫМ пулом: список бэкендов не записан ни здесь, ни в коде.
+# Бэкенды добавляют и удаляют запросами к admin API (см. README, раздел «Запуск в Docker»):
+#   POST   /v1/backends        {"url": "http://b1:9000"}
+#   DELETE /v1/backends/{id}
 #
 #   https://localhost:8443    балансировщик (TLS 1.3)
 #   http://localhost:9090     Prometheus
 #   http://localhost:3000     Grafana (дашборд "mylb")
 #   http://localhost:9100     /metrics балансировщика (для curl)
-#   http://localhost:9101     admin API (только если задан MYLB_ADMIN_TOKEN, см. README)
-#   http://localhost:9001-3   тестовые бэкенды напрямую (для экспериментов с health-check)
-#   http://localhost:9004     запасной бэкенд b4: в ротацию его добавляют через admin API
+#   http://localhost:9101     admin API: бэкенды, сертификат, настройки
+#   http://localhost:9001-4   тестовые серверы b1-b4 напрямую (для экспериментов с health-check)
 #
 # Все порты привязаны к 127.0.0.1: снаружи, из вашей сети, ничего не видно.
 
@@ -44,6 +50,11 @@ services:
       - certs:/certs
     restart: "no"
 
+  # Тестовые серверы. Это не настройка балансировщика, а просто серверы, которые есть в сети:
+  # балансировщик о них не знает, пока сервер не добавят запросом POST /v1/backends.
+  # Внутри docker-сети их адреса: http://b1:9000 ... http://b4:9000 (имя сервиса и порт 9000).
+  # Нужен ещё один сервер? Скопируйте блок, поменяйте имя (b5) и порт на хосте (9005),
+  # потом `docker compose up -d` и POST /v1/backends {"url": "http://b5:9000"}.
   b1:
     <<: *backend
     entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b1"]
@@ -56,8 +67,6 @@ services:
     <<: *backend
     entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b3"]
     ports: ["127.0.0.1:9003:9000"]
-  # Запасной бэкенд: в --backends у lb его нет. Нужен, чтобы попробовать добавление
-  # через admin API:  POST /v1/backends  {"url": "http://b4:9000"}
   b4:
     <<: *backend
     entrypoint: ["python", "demo_backend.py", "--addr", "0.0.0.0:9000", "--name", "b4"]
@@ -73,24 +82,21 @@ services:
     depends_on:
       certgen:
         condition: service_completed_successfully
-      b1: {condition: service_healthy}
-      b2: {condition: service_healthy}
-      b3: {condition: service_healthy}
+      # От b1-b4 балансировщик не зависит: он может стартовать и без единого бэкенда.
     command:
       - "--listen=0.0.0.0:8443"
       - "--metrics=0.0.0.0:9100"      # внутри docker-сети; наружу порт открыт только на loopback
-      - "--admin=0.0.0.0:9101"        # то же самое; без MYLB_ADMIN_TOKEN admin API не запускается
+      - "--admin=0.0.0.0:9101"        # то же самое
       - "--state-file=/state/mylb-state.json"
       - "--cert=/certs/server.crt"
       - "--key=/certs/server.key"
-      - "--backends=http://b1:9000,http://b2:9000,http://b3:9000"   # имена сервисов разрешает docker DNS
-      - "--max-conns=${MAX_CONNS:-100}"
+      # Флагов --backends и --max-conns здесь нет: бэкенды и настройки задаются через admin API
+      # и хранятся в файле состояния (том state), поэтому переживают пересоздание контейнера.
     environment:
-      # Admin API включается, только если переменная задана при запуске:
-      #   MYLB_ADMIN_TOKEN=мой-секрет docker compose up -d
-      # С включённым admin API бэкенды и настройки берутся из файла состояния (том state),
-      # а --backends и --max-conns выше действуют только при самом первом запуске.
-      MYLB_ADMIN_TOKEN: ${MYLB_ADMIN_TOKEN:-}
+      # Токен admin API. Без admin API в балансировщик нельзя добавить ни одного бэкенда,
+      # поэтому токен обязателен: если его нет, compose остановится с этим сообщением.
+      # Значение берётся из файла .env рядом с этим файлом или из переменной окружения.
+      MYLB_ADMIN_TOKEN: ${MYLB_ADMIN_TOKEN:?нужен токен admin API - скопируйте .env.example в .env и впишите свой токен}
     volumes:
       - certs:/certs          # на запись: admin API заменяет файлы сертификата
       - state:/state          # файл состояния admin API переживает пересоздание контейнера
