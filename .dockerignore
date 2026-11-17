@@ -2,8 +2,8 @@
 .gitignore
 certs/
 __pycache__/
-*.pyc
 tests/
 docker/
 README.md
 .env
+hostinfo/

@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: mylb Admin API
-  version: 1.0.0
+  version: 1.1.0
   summary: Управление балансировщиком mylb без перезапуска.
   description: |
     API управления (control plane) для mylb: бэкенды, TLS-сертификат и настройки
@@ -69,6 +69,8 @@ tags:
     description: Сертификат и ключ клиентского листенера (один сертификат, без SNI).
   - name: settings
     description: Параметры, которые можно менять на лету.
+  - name: system
+    description: Сведения о машине, на которой запущен балансировщик (только чтение).
 
 paths:
   /backends:
@@ -380,6 +382,74 @@ paths:
         "500":
           $ref: "#/components/responses/PersistFailed"
 
+  /system/interfaces:
+    get:
+      tags: [system]
+      operationId: getHostInterfaces
+      summary: Сетевые интерфейсы машины и их IPv4-адреса
+      description: |
+        Сведения о сети **машины**, на которой запущен балансировщик. По ним
+        выбирают адрес, на котором балансировщик принимает клиентов (`--listen`,
+        в Docker переменная `LB_BIND`).
+
+        Балансировщик не собирает их сам: в контейнере он видит только сеть
+        контейнера. Их собирает скрипт `scripts/host-info.sh` на самой машине
+        и до запуска (его вызывает `scripts/up.sh`), а этот запрос отдаёт то,
+        что скрипт записал.
+
+        Поэтому это **снимок**, а не живые данные: когда он сделан, показывает
+        `collected_at`. Если адреса поменялись, запустите скрипт ещё раз,
+        перезапускать балансировщик не нужно.
+
+        Только IPv4. Интерфейсы без IPv4-адреса в список не попадают. В облаке
+        здесь будут приватные адреса: публичного адреса на интерфейсах машины нет.
+      responses:
+        "200":
+          description: Снимок сетевых интерфейсов машины.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HostInterfaces"
+              example:
+                collected_at: "2026-11-16T22:40:00Z"
+                hostname: my-server
+                source: ip
+                items:
+                  - name: lo
+                    addresses:
+                      - address: 127.0.0.1
+                        prefix: 8
+                  - name: eth0
+                    addresses:
+                      - address: 10.0.1.15
+                        prefix: 24
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: "Сведения ещё не собраны: скрипт не запускали (`code: host_info_missing`)."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Not Found
+                status: 404
+                code: host_info_missing
+                detail: Сведения о сети машины не собраны. Запустите на машине bash scripts/host-info.sh.
+        "500":
+          description: "Файл со сведениями повреждён (`code: host_info_invalid`). Соберите его заново."
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              example:
+                type: about:blank
+                title: Internal Server Error
+                status: 500
+                code: host_info_invalid
+                detail: Файл со сведениями о машине повреждён.
+
 components:
   securitySchemes:
     bearerAuth:
@@ -551,6 +621,52 @@ components:
         - cert_pem: "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
           key_pem: "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
 
+    HostInterfaces:
+      type: object
+      required: [collected_at, hostname, source, items]
+      properties:
+        collected_at:
+          type: string
+          format: date-time
+          description: Когда собраны сведения (UTC).
+        hostname:
+          type: string
+          description: Имя машины. Может быть пустым.
+        source:
+          type: string
+          enum: [ip, ifconfig]
+          description: Какой командой собрано. `ip` на Linux, `ifconfig` на macOS.
+        items:
+          type: array
+          description: Интерфейсы, у которых есть хотя бы один IPv4-адрес.
+          items:
+            $ref: "#/components/schemas/HostInterface"
+
+    HostInterface:
+      type: object
+      required: [name, addresses]
+      properties:
+        name:
+          type: string
+          description: Имя интерфейса в операционной системе.
+          example: eth0
+        addresses:
+          type: array
+          items:
+            type: object
+            required: [address, prefix]
+            properties:
+              address:
+                type: string
+                format: ipv4
+                example: 10.0.1.15
+              prefix:
+                type: integer
+                minimum: 0
+                maximum: 32
+                description: Длина префикса подсети. `24` значит маску 255.255.255.0.
+                example: 24
+
     Settings:
       type: object
       additionalProperties: false
@@ -621,6 +737,8 @@ components:
             - cert_key_mismatch
             - cert_file_missing
             - persist_failed
+            - host_info_missing
+            - host_info_invalid
             - internal_error
         detail:
           type: string

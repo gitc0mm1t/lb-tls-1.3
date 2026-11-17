@@ -292,6 +292,61 @@ class SettingsTests(AdminTestCase):
         self.assertFalse(os.path.exists(self.state_path))
 
 
+class HostInfoTests(AdminTestCase):
+    """GET /v1/system/interfaces отдаёт файл, который пишет scripts/host-info.sh."""
+
+    GOOD = {"collected_at": "2026-11-16T22:40:00Z", "hostname": "srv-1", "source": "ip",
+            "items": [{"name": "lo", "addresses": [{"address": "127.0.0.1", "prefix": 8}]},
+                      {"name": "eth0", "addresses": [{"address": "10.0.1.15", "prefix": 24},
+                                                     {"address": "10.0.1.16", "prefix": 24}]}]}
+
+    def setUp(self):
+        super().setUp()
+        self.info_path = f"{self.dir.name}/host.json"
+        self.admin.host_info_path = self.info_path
+
+    def write(self, text):
+        with open(self.info_path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    def test_returns_collected_info(self):
+        self.write(json.dumps(self.GOOD))
+        status, headers, body = self.call("GET", "/v1/system/interfaces")
+        self.assertEqual(status, 200)
+        self.assertEqual(headers.get_content_type(), "application/json")
+        self.assertEqual(body, self.GOOD)
+
+    def test_file_is_reread_on_every_request(self):
+        self.write(json.dumps(self.GOOD))
+        self.assertEqual(self.call("GET", "/v1/system/interfaces")[2]["hostname"], "srv-1")
+        self.write(json.dumps({**self.GOOD, "hostname": "srv-2", "items": []}))    # скрипт запустили заново
+        status, _, body = self.call("GET", "/v1/system/interfaces")
+        self.assertEqual((status, body["hostname"], body["items"]), (200, "srv-2", []))
+
+    def test_extra_fields_from_file_do_not_leak(self):
+        self.write(json.dumps({**self.GOOD, "token": "secret-from-file"}))
+        status, _, body = self.call("GET", "/v1/system/interfaces")
+        self.assertEqual(status, 200)
+        self.assertNotIn("token", body)
+
+    def test_not_collected_is_404(self):
+        body = self.assertProblem(self.call("GET", "/v1/system/interfaces"), 404, "host_info_missing")
+        self.assertIn("host-info.sh", body["detail"])        # в ошибке сказано, что делать
+
+    def test_broken_file_is_500(self):
+        self.write("{ это не json")
+        self.assertProblem(self.call("GET", "/v1/system/interfaces"), 500, "host_info_invalid")
+        self.write(json.dumps({**self.GOOD, "items": [{"name": "eth0", "addresses": [{"address": "x", "prefix": 1}]}]}))
+        self.assertProblem(self.call("GET", "/v1/system/interfaces"), 500, "host_info_invalid")
+
+    def test_needs_token_and_is_read_only(self):
+        self.write(json.dumps(self.GOOD))
+        self.assertProblem(self.call("GET", "/v1/system/interfaces", token=None), 401, "unauthorized")
+        result = self.call("POST", "/v1/system/interfaces", body={})
+        self.assertProblem(result, 405, "method_not_allowed")
+        self.assertEqual(result[1]["Allow"], "GET")
+
+
 class CertificateTests(AdminTestCase):
     def fingerprint(self, cert_path):
         return hashlib.sha256(ssl.PEM_cert_to_DER_cert(support.read(cert_path).strip())).hexdigest()

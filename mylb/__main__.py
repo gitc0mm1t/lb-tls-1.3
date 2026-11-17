@@ -30,6 +30,9 @@ def main() -> None:
                     help="адрес admin API; включается переменной окружения MYLB_ADMIN_TOKEN")
     ap.add_argument("--state-file", default="mylb-state.json",
                     help="файл, в который admin API сохраняет бэкенды и настройки")
+    ap.add_argument("--host-info", default="hostinfo/host.json",
+                    help="файл со сведениями о сети машины; его пишет scripts/host-info.sh, "
+                         "а admin API отдаёт в GET /v1/system/interfaces")
     ap.add_argument("--cert", default="certs/server.crt", help="TLS-сертификат")
     ap.add_argument("--key", default="certs/server.key", help="приватный ключ")
     # Списка бэкендов по умолчанию нет: адреса серверов не зашиты ни в код, ни в конфиг.
@@ -103,7 +106,8 @@ def main() -> None:
     try:
         server = ProxyServer(parse_addr(args.listen), pool, certs)
         msrv = ThreadingHTTPServer(parse_addr(args.metrics), MetricsHandler)
-        asrv = AdminServer(parse_addr(args.admin), pool, certs, args.state_file, token) if token else None
+        asrv = AdminServer(parse_addr(args.admin), pool, certs, args.state_file, token,
+                           args.host_info) if token else None
     except (OSError, ValueError) as e:
         log("error", "не удалось запуститься", err=str(e))
         sys.exit(1)

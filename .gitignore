@@ -2,4 +2,5 @@ certs/
 mylb-state.json
 .env
 __pycache__/
-*.pyc
+.idea/
+hostinfo/*.json

@@ -18,7 +18,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-from . import state
+from . import hostinfo, state
 from .backend import Backend
 from .logs import log
 from .state import PersistError
@@ -39,6 +39,7 @@ ROUTES = [
     (re.compile(r"^/v1/tls/certificate$"), {"GET": "get_certificate", "PUT": "replace_certificate"}),
     (re.compile(r"^/v1/tls/certificate/reload$"), {"POST": "reload_certificate"}),
     (re.compile(r"^/v1/settings$"), {"GET": "get_settings", "PATCH": "update_settings"}),
+    (re.compile(r"^/v1/system/interfaces$"), {"GET": "get_host_interfaces"}),
 ]
 
 
@@ -82,12 +83,13 @@ def _settings_json(pool) -> dict:
 class AdminServer(ThreadingHTTPServer):
     daemon_threads = True
 
-    def __init__(self, addr, pool, certs, state_path: str, token: str):
+    def __init__(self, addr, pool, certs, state_path: str, token: str, host_info_path: str = ""):
         if not token:
             raise ValueError("admin API нельзя запускать без токена")
         self.pool = pool
         self.certs = certs
         self.state_path = state_path
+        self.host_info_path = host_info_path   # файл от scripts/host-info.sh, см. hostinfo.py
         self.token = token
         # Изменения выполняются строго по одному. Их мало, а с одним локом не нужно
         # думать, что будет, если два запроса одновременно правят файл состояния.
@@ -304,6 +306,22 @@ class AdminHandler(BaseHTTPRequestHandler):
                 raise ApiError(409, e.code, f"{e.detail} Активным остаётся прежний сертификат.") from None
         self.audit = {"action": "certificate.reload", "fingerprint": info["fingerprint_sha256"][:16]}
         return 200, info, {}
+
+    # --- сведения о машине ---
+
+    def get_host_interfaces(self):
+        # Файл читаем при каждом запросе: скрипт сбора можно запустить заново,
+        # и свежие сведения появятся без перезапуска балансировщика.
+        try:
+            return 200, hostinfo.load(self.server.host_info_path), {}
+        except hostinfo.HostInfoMissing:
+            raise ApiError(404, "host_info_missing",
+                           "Сведения о сети машины не собраны. Запустите на машине "
+                           "bash scripts/host-info.sh (или запускайте стенд через bash scripts/up.sh).") from None
+        except hostinfo.HostInfoInvalid as e:
+            raise ApiError(500, "host_info_invalid",
+                           f"Файл со сведениями о машине повреждён: {e}. "
+                           "Соберите его заново: bash scripts/host-info.sh.") from None
 
     # --- настройки ---
 
